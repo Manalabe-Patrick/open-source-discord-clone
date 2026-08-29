@@ -7,7 +7,8 @@
   "scripts": {
     "generate": "prisma generate",
     "validate": "prisma validate",
-    "migrate:dev": "prisma migrate dev"
+    "migrate:dev": "prisma migrate dev",
+    "migrate:test": "node scripts/migrate-test.js"
   },
   "dependencies": {
     "@prisma/client": "^5.20.0"

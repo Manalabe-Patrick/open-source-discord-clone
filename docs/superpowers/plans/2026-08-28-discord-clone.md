@@ -27,7 +27,9 @@ This plan covers **Phase 0 (scaffolding) through Phase 2 (servers & channels CRU
 
 ## Phase 0: Monorepo Scaffold & Tooling
 
-**Deliverable:** Both apps boot locally, share a Prisma-backed database package, and `npm test` passes in both. Manual check: visiting `http://localhost:3000` shows the default Next.js page, and `http://localhost:4000/health` returns `{"status":"ok"}`.
+**Deliverable:** Both apps boot locally, `npm test` passes in both, and the shared `@repo/database` package exists with a syntactically valid (but model-less) Prisma schema. Manual check: visiting `http://localhost:3000` shows the default Next.js page, and `http://localhost:4000/health` returns `{"status":"ok"}`.
+
+Note: neither app actually imports `@repo/database` yet in this phase — Prisma refuses to generate a client with zero models, so wiring each app to it is deferred to Phase 1, immediately after Task 1.1 gives the schema its first real models.
 
 ### Task 0.1: Initialize monorepo root
 
@@ -215,7 +217,7 @@ git commit -m "test: add Vitest to apps/web"
 - Create: `packages/database/tsconfig.json`
 
 **Interfaces:**
-- Produces: `prisma` singleton exported from `@repo/database` (`import { prisma } from '@repo/database'`), typed as `PrismaClient`. Later tasks (Phase 1 onward) add models to `schema.prisma` — this task only establishes the package and an empty, valid schema.
+- Produces: `prisma` singleton exported from `@repo/database` (`import { prisma } from '@repo/database'`), typed as `PrismaClient`. Later tasks (Phase 1 onward) add models to `schema.prisma` — this task only establishes the package and an empty, valid schema. **Important:** Prisma's CLI refuses to `generate` a client for a schema with zero models (it errors with "You don't have any models defined"), so this task cannot actually produce a working, importable client yet — only a syntactically valid schema. The `prisma` export in `src/index.ts` will not be safely importable/usable until Task 1.1 adds real models and runs `generate` successfully for the first time; nothing in this task or Phase 0 actually imports it (that happens in Tasks 1.2 and 1.3).
 
 - [ ] **Step 1: Create the package directory and `package.json`**
 
@@ -230,6 +232,7 @@ Create `packages/database/package.json`:
   "types": "src/index.ts",
   "scripts": {
     "generate": "prisma generate",
+    "validate": "prisma validate",
     "migrate:dev": "prisma migrate dev"
   },
   "dependencies": {
@@ -287,7 +290,7 @@ DATABASE_URL="postgresql://placeholder:placeholder@localhost:5432/placeholder"
 
 - [ ] **Step 5: Create the Prisma client singleton**
 
-Create `packages/database/src/index.ts`:
+Create `packages/database/src/index.ts`. This file is written now so the shape of `@repo/database`'s export is settled, but nothing in Phase 0 imports it yet — see the note above about why it can't actually run until Task 1.1:
 
 ```typescript
 import { PrismaClient } from '@prisma/client'
@@ -303,10 +306,12 @@ if (process.env.NODE_ENV !== 'production') {
 export * from '@prisma/client'
 ```
 
-- [ ] **Step 6: Generate the Prisma client**
+- [ ] **Step 6: Validate the schema**
 
-Run: `npm run generate --workspace=packages/database`
-Expected: output ends with "Generated Prisma Client" and no errors, even though the schema has zero models yet.
+`prisma generate` cannot succeed yet (zero models — see the note above), but `prisma validate` checks schema syntax without requiring any models, so it's the right verification for this task.
+
+Run: `npm run validate --workspace=packages/database`
+Expected: output includes "The schema at prisma\schema.prisma is valid" (or `prisma/schema.prisma` on non-Windows) with no errors. A "major update available" notice about a newer Prisma release is expected and can be ignored — this project is intentionally pinned to `^5.20.0`.
 
 - [ ] **Step 7: Commit**
 
@@ -315,71 +320,7 @@ git add packages/database
 git commit -m "feat: add shared @repo/database Prisma package"
 ```
 
-### Task 0.5: Wire `apps/web` to `@repo/database`
-
-**Files:**
-- Modify: `apps/web/package.json` (add dependency)
-- Modify: `apps/web/next.config.ts` (add `transpilePackages`)
-- Test: `apps/web/src/lib/database.test.ts`
-
-**Interfaces:**
-- Consumes: `prisma` from `@repo/database` (Task 0.4).
-- Produces: confirms `apps/web` can import `@repo/database` at runtime and in tests.
-
-- [ ] **Step 1: Add the workspace dependency**
-
-Add this line to `apps/web/package.json` inside `"dependencies"`:
-
-```json
-"@repo/database": "*"
-```
-
-Run: `npm install`
-Expected: completes with no errors; `node_modules/@repo/database` is a symlink into `packages/database`.
-
-- [ ] **Step 2: Add `transpilePackages` to `apps/web/next.config.ts`**
-
-`create-next-app` (this project is on Next.js 16) generates a TypeScript config file, not `.mjs`. Open `apps/web/next.config.ts` and replace its contents with:
-
-```typescript
-import type { NextConfig } from 'next'
-
-const nextConfig: NextConfig = {
-  transpilePackages: ['@repo/database'],
-}
-
-export default nextConfig
-```
-
-- [ ] **Step 3: Write the failing test**
-
-Create `apps/web/src/lib/database.test.ts`:
-
-```typescript
-import { describe, it, expect } from 'vitest'
-import { prisma } from '@repo/database'
-
-describe('database package', () => {
-  it('exposes a Prisma client instance', () => {
-    expect(prisma).toBeDefined()
-    expect(typeof prisma.$connect).toBe('function')
-  })
-})
-```
-
-- [ ] **Step 4: Run the test**
-
-Run: `npm test --workspace=apps/web`
-Expected: PASS — both `sanity` and `database package` test suites pass.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add apps/web/package.json apps/web/next.config.ts apps/web/src/lib/database.test.ts
-git commit -m "feat: wire apps/web to @repo/database"
-```
-
-### Task 0.6: Scaffold `apps/socket-server`
+### Task 0.5: Scaffold `apps/socket-server`
 
 **Files:**
 - Create: `apps/socket-server/package.json`
@@ -532,44 +473,7 @@ git add apps/socket-server
 git commit -m "feat: scaffold apps/socket-server with Express, Socket.IO, health check"
 ```
 
-### Task 0.7: Wire `apps/socket-server` to `@repo/database`
-
-**Files:**
-- Test: `apps/socket-server/src/database.test.ts`
-
-**Interfaces:**
-- Consumes: `prisma` from `@repo/database` (Task 0.4).
-- Produces: confirms `apps/socket-server` can import `@repo/database` at runtime and in tests, matching Task 0.5's confirmation for `apps/web`.
-
-- [ ] **Step 1: Write the test**
-
-Create `apps/socket-server/src/database.test.ts`:
-
-```typescript
-import { describe, it, expect } from 'vitest'
-import { prisma } from '@repo/database'
-
-describe('database package', () => {
-  it('exposes a Prisma client instance', () => {
-    expect(prisma).toBeDefined()
-    expect(typeof prisma.$connect).toBe('function')
-  })
-})
-```
-
-- [ ] **Step 2: Run the test**
-
-Run: `npm test --workspace=apps/socket-server`
-Expected: PASS — both `health check` and `database package` suites pass.
-
-- [ ] **Step 3: Commit**
-
-```bash
-git add apps/socket-server/src/database.test.ts
-git commit -m "test: confirm apps/socket-server can access @repo/database"
-```
-
-### Task 0.8: Root env examples and full-stack smoke test
+### Task 0.6: Root env examples and full-stack smoke test
 
 **Files:**
 - Create: `apps/web/.env.example`
@@ -626,7 +530,7 @@ git add apps/web/.env.example apps/socket-server/.env.example packages/database/
 git commit -m "docs: add .env.example files for all workspaces"
 ```
 
-### Task 0.9: Local Postgres via Docker Compose
+### Task 0.7: Local Postgres via Docker Compose
 
 **Files:**
 - Create: `docker-compose.yml` (root)
@@ -669,7 +573,7 @@ Replace the placeholder created in Task 0.4 Step 3 with:
 DATABASE_URL="postgresql://postgres:postgres@localhost:5433/discord_clone_dev"
 ```
 
-- [ ] **Step 4: Update the three `.env.example` files created in Task 0.8 to use this as the documented local default**
+- [ ] **Step 4: Update the three `.env.example` files created in Task 0.6 to use this as the documented local default**
 
 In `packages/database/.env.example`, `apps/web/.env.example`, and `apps/socket-server/.env.example`, replace the line:
 
@@ -784,7 +688,7 @@ Expected: "Generated Prisma Client" with no errors; `User`, `Account`, `Session`
 
 - [ ] **Step 4: Run a local migration**
 
-This requires the local Postgres container from Task 0.9 to be running (`docker compose up -d` if it isn't). `packages/database/.env` should already have `DATABASE_URL="postgresql://postgres:postgres@localhost:5433/discord_clone_dev"` from that task.
+This requires the local Postgres container from Task 0.7 to be running (`docker compose up -d` if it isn't). `packages/database/.env` should already have `DATABASE_URL="postgresql://postgres:postgres@localhost:5433/discord_clone_dev"` from that task.
 
 Run: `npm run migrate:dev --workspace=packages/database -- --name add_auth_models`
 Expected: prompts complete and print "Your database is now in sync with your schema", creating `packages/database/prisma/migrations/<timestamp>_add_auth_models/`.
@@ -796,13 +700,116 @@ git add packages/database/prisma packages/database/package.json
 git commit -m "feat: add User, Account, Session models for auth"
 ```
 
-### Task 1.2: Install and configure Auth.js v5 in `apps/web`
+### Task 1.2: Wire `apps/web` to `@repo/database`
+
+**Files:**
+- Modify: `apps/web/package.json` (add dependency)
+- Modify: `apps/web/next.config.ts` (add `transpilePackages`)
+- Test: `apps/web/src/lib/database.test.ts`
+
+**Interfaces:**
+- Consumes: `prisma` from `@repo/database` (Task 0.4's export, now backed by real models and a successful `generate` from Task 1.1).
+- Produces: confirms `apps/web` can import `@repo/database` at runtime and in tests. This task runs here, not in Phase 0, because Prisma cannot produce a working client until Task 1.1 gives the schema its first models — importing `@repo/database` any earlier would throw at module-load time.
+
+- [ ] **Step 1: Add the workspace dependency**
+
+Add this line to `apps/web/package.json` inside `"dependencies"`:
+
+```json
+"@repo/database": "*"
+```
+
+Run: `npm install`
+Expected: completes with no errors; `node_modules/@repo/database` is a symlink into `packages/database`.
+
+- [ ] **Step 2: Add `transpilePackages` to `apps/web/next.config.ts`**
+
+Open `apps/web/next.config.ts` and replace its contents with:
+
+```typescript
+import type { NextConfig } from 'next'
+
+const nextConfig: NextConfig = {
+  transpilePackages: ['@repo/database'],
+}
+
+export default nextConfig
+```
+
+- [ ] **Step 3: Write the failing test**
+
+Create `apps/web/src/lib/database.test.ts`:
+
+```typescript
+import { describe, it, expect } from 'vitest'
+import { prisma } from '@repo/database'
+
+describe('database package', () => {
+  it('exposes a Prisma client instance', () => {
+    expect(prisma).toBeDefined()
+    expect(typeof prisma.$connect).toBe('function')
+    expect(typeof prisma.user.findUnique).toBe('function')
+  })
+})
+```
+
+- [ ] **Step 4: Run the test**
+
+Run: `npm test --workspace=apps/web`
+Expected: PASS — both `sanity` and `database package` test suites pass. (If this fails with a Prisma initialization error, confirm Task 1.1 Step 3's `generate` actually succeeded — `apps/web` shares the same generated client as `packages/database`.)
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add apps/web/package.json apps/web/next.config.ts apps/web/src/lib/database.test.ts
+git commit -m "feat: wire apps/web to @repo/database"
+```
+
+### Task 1.3: Wire `apps/socket-server` to `@repo/database`
+
+**Files:**
+- Test: `apps/socket-server/src/database.test.ts`
+
+**Interfaces:**
+- Consumes: `prisma` from `@repo/database` (Task 0.4's export, now backed by real models and a successful `generate` from Task 1.1).
+- Produces: confirms `apps/socket-server` can import `@repo/database` at runtime and in tests, matching Task 1.2's confirmation for `apps/web`.
+
+- [ ] **Step 1: Write the test**
+
+Create `apps/socket-server/src/database.test.ts`:
+
+```typescript
+import { describe, it, expect } from 'vitest'
+import { prisma } from '@repo/database'
+
+describe('database package', () => {
+  it('exposes a Prisma client instance', () => {
+    expect(prisma).toBeDefined()
+    expect(typeof prisma.$connect).toBe('function')
+    expect(typeof prisma.user.findUnique).toBe('function')
+  })
+})
+```
+
+- [ ] **Step 2: Run the test**
+
+Run: `npm test --workspace=apps/socket-server`
+Expected: PASS — both `health check` and `database package` suites pass.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add apps/socket-server/src/database.test.ts
+git commit -m "test: confirm apps/socket-server can access @repo/database"
+```
+
+### Task 1.4: Install and configure Auth.js v5 in `apps/web`
 
 **Files:**
 - Create: `apps/web/src/lib/auth.config.ts`
 - Create: `apps/web/src/lib/auth.ts`
 - Create: `apps/web/src/app/api/auth/[...nextauth]/route.ts`
-- Modify: `apps/web/.env.example` (document new vars — already has them from Task 0.8, verify they match)
+- Modify: `apps/web/.env.example` (document new vars — already has them from Task 0.6, verify they match)
 
 **Interfaces:**
 - Produces: `auth()`, `handlers`, `signIn`, `signOut` exported from `@/lib/auth.ts` — every later server-side check calls `await auth()` (replacing the older `getServerSession(authOptions)` pattern) to get `{ user: { id, email, name } } | null`. `authConfig` exported from `@/lib/auth.config.ts` is the Edge-safe subset (no Prisma, no bcrypt) consumed by Task 2.6's `proxy.ts`.
@@ -921,7 +928,7 @@ git add apps/web/src/lib/auth.config.ts apps/web/src/lib/auth.ts apps/web/src/ap
 git commit -m "feat: configure Auth.js v5 with Credentials and Google providers"
 ```
 
-### Task 1.3: Signup API route
+### Task 1.5: Signup API route
 
 **Files:**
 - Create: `apps/web/src/app/api/signup/route.ts`
@@ -1038,7 +1045,7 @@ git add apps/web/src/app/api/signup
 git commit -m "feat: add signup API route with validation"
 ```
 
-### Task 1.4: Signup and login pages
+### Task 1.6: Signup and login pages
 
 **Files:**
 - Create: `apps/web/src/app/signup/page.tsx`
@@ -1047,7 +1054,7 @@ git commit -m "feat: add signup API route with validation"
 - Modify: `apps/web/src/app/layout.tsx` (wrap children in the session provider)
 
 **Interfaces:**
-- Consumes: `POST /api/signup` (Task 1.3), Auth.js's `signIn`/`useSession` from `next-auth/react` (Task 1.2).
+- Consumes: `POST /api/signup` (Task 1.5), Auth.js's `signIn`/`useSession` from `next-auth/react` (Task 1.4).
 - Produces: `/signup` and `/login` routes; every later page can call `useSession()` because `SessionProvider` now wraps the app.
 
 - [ ] **Step 1: Create the client-side session provider wrapper**
@@ -1445,7 +1452,7 @@ git commit -m "feat: add shared @repo/permissions package"
 - Test: `apps/web/src/app/api/servers/route.test.ts`
 
 **Interfaces:**
-- Consumes: `auth` from `@/lib/auth` (Task 1.2), `prisma` from `@repo/database` (Task 0.4).
+- Consumes: `auth` from `@/lib/auth` (Task 1.4), `prisma` from `@repo/database` (Task 0.4).
 - Produces: `POST /api/servers` accepting `{ name }`, creating a `Server` + an `OWNER` `Membership` for the current user, returning `201` with the created server. `GET /api/servers` returning `200` with the array of servers the current user is a member of (each including its `channels`). Both return `401` if there's no session. Later tasks (2.4, 2.5, 2.6) build on this shape.
 
 - [ ] **Step 1: Write the failing tests**
@@ -1596,7 +1603,7 @@ git commit -m "feat: add create/list servers API"
 - Test: `apps/web/src/app/api/servers/[serverId]/join/route.test.ts`
 
 **Interfaces:**
-- Consumes: `auth` (Task 1.2), `prisma` (Task 0.4), the `Server`/`Membership` shape from Task 2.3.
+- Consumes: `auth` (Task 1.4), `prisma` (Task 0.4), the `Server`/`Membership` shape from Task 2.3.
 - Produces: `POST /api/servers/:serverId/join` creating a `MEMBER` `Membership` for the current user (idempotent — joining twice doesn't error or duplicate), returning `200`. `POST /api/servers/:serverId/leave` deleting the current user's membership, returning `200`. Both return `401` with no session, `404` if the server doesn't exist.
 
 - [ ] **Step 1: Write the failing test**
@@ -1756,7 +1763,7 @@ git commit -m "feat: add join/leave server API"
 - Test: `apps/web/src/app/api/servers/[serverId]/channels/route.test.ts`
 
 **Interfaces:**
-- Consumes: `canCreateChannel` from `@repo/permissions` (Task 2.2), `auth` (Task 1.2), `prisma` (Task 0.4).
+- Consumes: `canCreateChannel` from `@repo/permissions` (Task 2.2), `auth` (Task 1.4), `prisma` (Task 0.4).
 - Produces: `POST /api/servers/:serverId/channels` accepting `{ name }`, creating a `Channel`, returning `201`; returns `403` if the caller's `Membership.role` for that server is `MEMBER`. `GET /api/servers/:serverId/channels` returning `200` with all channels for that server. Phase 3's realtime chat task loads channel history through this same `Channel.id`.
 
 - [ ] **Step 1: Write the failing test**
@@ -1942,7 +1949,7 @@ git commit -m "feat: add create/list channels API with permission check"
 
 - [ ] **Step 1: Create `apps/web/src/proxy.ts`**
 
-This project is on Next.js 16, where the route-protection convention formerly called `middleware.ts` is now `proxy.ts` (same functionality, renamed file and export). It runs on the Edge runtime, so it uses the Edge-safe `authConfig` from Task 1.2 (no Prisma, no bcrypt) — not the full `@/lib/auth` — via a second, lightweight `NextAuth()` call whose `.auth` is exactly Auth.js's own recommended pattern for this file:
+This project is on Next.js 16, where the route-protection convention formerly called `middleware.ts` is now `proxy.ts` (same functionality, renamed file and export). It runs on the Edge runtime, so it uses the Edge-safe `authConfig` from Task 1.2 (no Prisma, no bcrypt) — not the full `@/lib/auth` — via a second, lightweight `NextAuth()` call whose `.auth` is exactly Auth.js's own recommended pattern for this file (the Edge-safe config comes from Task 1.4's `auth.config.ts`):
 
 ```typescript
 import NextAuth from 'next-auth'
@@ -2189,6 +2196,7 @@ git commit -m "feat: add server/channel sidebar UI"
 - **Spec coverage (Phases 0–2):** monorepo scaffold ✓ (Phase 0), Prisma schema + NextAuth Credentials/Google ✓ (Phase 1), servers/channels CRUD + sidebar + Owner-on-create ✓ (Phase 2), shared permissions logic used consistently ✓ (Task 2.2, consumed by Task 2.5). Realtime chat, presence, roles enforcement beyond channel-create, DMs, friends, attachments, and deployment are intentionally deferred to the two follow-on plan documents named in the header — they are not gaps in this plan, they're out of this plan's scope by design.
 - **Placeholder scan:** no TBD/TODO markers; every step has runnable commands or complete code.
 - **Type consistency:** `Role` is used as the string union `'OWNER' | 'ADMIN' | 'MEMBER'` consistently between `@repo/permissions` (Task 2.2) and the Prisma `Role` enum (Task 2.1) — Prisma generates the same string literal values, so `membership.role` (a Prisma `Role`) passes directly into `canCreateChannel(role: Role)` without casting. `Server`, `Membership`, `Channel` field names match between the schema (Task 2.1) and every API route that queries them (Tasks 2.3–2.5).
+- **Revision note:** Tasks 0.4–1.6 were renumbered during execution after Task 0.4's implementer found that Prisma refuses to `generate` a client with zero models. The "wire app to `@repo/database`" tasks (originally 0.5 and 0.7) were moved to run right after Task 1.1 (now Tasks 1.2 and 1.3), since that's the first point real models exist; everything after shifted down accordingly (old 1.2→1.4, 1.3→1.5, 1.4→1.6). Task 0.4 itself now verifies via `prisma validate` instead of `prisma generate`. Separately, Task 0.2's scaffold produced Next.js 16.3.3 (not the 14 assumed when this plan was written), which changed dynamic route params to `Promise`-based, `next.config.mjs` to `next.config.ts`, and `middleware.ts` to `proxy.ts`; Task 1.4 also moved from NextAuth v4 to Auth.js v5 (`next-auth@beta`) for Next.js 15+ compatibility, using its edge-safe split-config pattern.
 
 ---
 

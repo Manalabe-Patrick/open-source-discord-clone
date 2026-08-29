@@ -10,6 +10,8 @@ services:
       - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      # Only runs on a fresh (empty) postgres_data volume; see docker/init-test-db.sql for the manual fallback.
+      - ./docker/init-test-db.sql:/docker-entrypoint-initdb.d/init-test-db.sql
 
 volumes:
   postgres_data:

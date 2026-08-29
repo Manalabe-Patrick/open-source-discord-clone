@@ -2,10 +2,12 @@ import express from 'express'
 import cors from 'cors'
 import { createServer as createHttpServer } from 'http'
 import { Server as SocketIOServer } from 'socket.io'
+import { fileURLToPath } from 'url'
+import path from 'path'
 
 export function createServer() {
   const app = express()
-  app.use(cors())
+  app.use(cors({ origin: process.env.WEB_ORIGIN ?? 'http://localhost:3000' }))
 
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok' })
@@ -19,7 +21,7 @@ export function createServer() {
   return { app, httpServer, io }
 }
 
-const isMain = process.argv[1] && process.argv[1].endsWith('index.ts')
+const isMain = Boolean(process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url))
 if (isMain) {
   const { httpServer } = createServer()
   const port = process.env.PORT ? Number(process.env.PORT) : 4000
