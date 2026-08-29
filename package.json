@@ -1,0 +1,14 @@
+{
+  "name": "discord-clone",
+  "private": true,
+  "version": "0.0.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev --workspace=apps/web",
+    "dev:socket": "npm run dev --workspace=apps/socket-server",
+    "test": "npm run test --workspaces --if-present"
+  }
+}
