@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { signOut } from 'next-auth/react'
 import { parseErrorResponse } from '@/lib/parseErrorResponse'
+import { disconnectSocket } from '@/lib/socket'
 
 type Server = { id: string; name: string }
 
@@ -68,7 +69,7 @@ export function ServerSidebar({
       <div className="flex items-center justify-between">
         <h2 className="font-bold">Servers</h2>
         <button
-          onClick={() => signOut({ callbackUrl: '/login' })}
+          onClick={() => { disconnectSocket(); signOut({ callbackUrl: '/login' }) }}
           className="rounded border p-1 text-sm"
         >
           Log out

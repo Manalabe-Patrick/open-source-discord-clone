@@ -75,6 +75,8 @@ describe('POST /api/servers', () => {
     const body = await response.json()
 
     expect(response.status).toBe(200)
-    expect(body.some((s: { name: string }) => s.name === 'Listed Server')).toBe(true)
+    const listed = body.find((s: { name: string }) => s.name === 'Listed Server')
+    expect(listed).toBeDefined()
+    expect(listed.role).toBe('OWNER')
   })
 })

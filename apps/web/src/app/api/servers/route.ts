@@ -39,8 +39,16 @@ export async function GET() {
 
   const servers = await prisma.server.findMany({
     where: { memberships: { some: { userId: session.user.id } } },
-    include: { channels: true },
+    include: {
+      channels: true,
+      memberships: { where: { userId: session.user.id }, select: { role: true } },
+    },
   })
 
-  return NextResponse.json(servers, { status: 200 })
+  const withRole = servers.map(({ memberships, ...server }) => ({
+    ...server,
+    role: memberships[0]?.role ?? 'MEMBER',
+  }))
+
+  return NextResponse.json(withRole, { status: 200 })
 }
