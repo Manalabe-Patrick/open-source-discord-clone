@@ -4,12 +4,14 @@ import { useEffect, useRef, useState } from 'react'
 import { getSocket } from '@/lib/socket'
 import { useSocketConnectionStatus } from '@/lib/useSocketConnectionStatus'
 import { canDeleteMessage, type Role } from '@repo/permissions'
+import { parseErrorResponse } from '@/lib/parseErrorResponse'
 
 type Message = {
   id: string
   content: string
   channelId: string
   createdAt: string
+  attachmentUrl: string | null
   author: { id: string; name: string | null; image: string | null }
 }
 
@@ -20,6 +22,8 @@ export function ChatPanel({ serverId, channelId, role, currentUserId }: { server
   const [content, setContent] = useState('')
   const [error, setError] = useState('')
   const [typingUserIds, setTypingUserIds] = useState<Set<string>>(new Set())
+  const [attachmentUrl, setAttachmentUrl] = useState<string | null>(null)
+  const [uploading, setUploading] = useState(false)
   const connectionStatus = useSocketConnectionStatus()
   const bottomRef = useRef<HTMLDivElement>(null)
   const typingStopTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -106,17 +110,42 @@ export function ChatPanel({ serverId, channelId, role, currentUserId }: { server
 
   function sendMessage(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!content.trim()) return
+    if (!content.trim() && !attachmentUrl) return
     setError('')
 
     const socket = getSocket()
     if (typingStopTimer.current) clearTimeout(typingStopTimer.current)
     socket.emit('typing:stop', { channelId })
 
-    socket.emit('message:new', { channelId, content }, (response: { ok: true } | { ok: false; error: string }) => {
+    socket.emit('message:new', { channelId, content, attachmentUrl: attachmentUrl ?? undefined }, (response: { ok: true } | { ok: false; error: string }) => {
       if (!response.ok) setError(response.error)
     })
     setContent('')
+    setAttachmentUrl(null)
+  }
+
+  async function attachImage(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    setError('')
+
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const response = await fetch('/api/uploads/message-image', { method: 'POST', body: formData })
+      if (response.ok) {
+        const { url } = await response.json()
+        setAttachmentUrl(url)
+      } else {
+        setError(await parseErrorResponse(response))
+      }
+    } catch {
+      setError('Upload failed')
+    } finally {
+      setUploading(false)
+      event.target.value = ''
+    }
   }
 
   function deleteMessage(messageId: string) {
@@ -137,6 +166,7 @@ export function ChatPanel({ serverId, channelId, role, currentUserId }: { server
               <span className="font-semibold">{message.author.name ?? 'Unknown'}</span>{' '}
               <span className="text-xs text-gray-500">{new Date(message.createdAt).toLocaleTimeString()}</span>
               <p>{message.content}</p>
+              {message.attachmentUrl && <img src={message.attachmentUrl} alt="attachment" className="mt-1 max-w-xs rounded" />}
             </div>
             {canDeleteMessage(role, message.author.id === currentUserId) && (
               <button onClick={() => deleteMessage(message.id)} className="text-xs text-gray-400 hover:text-red-500" title="Delete message">
@@ -154,6 +184,8 @@ export function ChatPanel({ serverId, channelId, role, currentUserId }: { server
       )}
       {error && <p className="px-3 text-xs text-red-500">{error}</p>}
       <form onSubmit={sendMessage} className="flex gap-2 border-t p-3">
+        <input type="file" accept="image/*" onChange={attachImage} disabled={uploading} className="text-xs" />
+        {attachmentUrl && <span className="self-center text-xs text-green-600">Image attached</span>}
         <input
           value={content}
           onChange={handleContentChange}

@@ -34,6 +34,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ oth
     content: message.content,
     dmConversationId: message.dmConversationId,
     createdAt: message.createdAt.toISOString(),
+    attachmentUrl: message.attachmentUrl,
     author: message.author,
   }))
 

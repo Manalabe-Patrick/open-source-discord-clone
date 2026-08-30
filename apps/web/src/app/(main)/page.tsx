@@ -12,7 +12,7 @@ import { FriendsPanel } from '@/components/FriendsPanel'
 import { useIdleDetection } from '@/lib/useIdleDetection'
 
 type Channel = { id: string; name: string }
-type Server = { id: string; name: string; channels: Channel[]; role: 'OWNER' | 'ADMIN' | 'MEMBER' }
+type Server = { id: string; name: string; icon: string | null; channels: Channel[]; role: 'OWNER' | 'ADMIN' | 'MEMBER' }
 
 export default function HomePage() {
   useIdleDetection()
@@ -55,7 +55,7 @@ export default function HomePage() {
           setSelectedChannelId(null)
         }}
         onCreated={(server) => {
-          setServers((prev) => [...prev, { ...server, channels: [], role: 'OWNER' }])
+          setServers((prev) => [...prev, { ...server, icon: server.icon ?? null, channels: [], role: 'OWNER' }])
           setActiveServerId(server.id)
           setView('server')
         }}

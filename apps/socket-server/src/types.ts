@@ -9,6 +9,7 @@ export interface MessagePayload {
   content: string
   channelId: string
   createdAt: string
+  attachmentUrl: string | null
   author: { id: string; name: string | null; image: string | null }
 }
 
@@ -17,6 +18,7 @@ export interface DMMessagePayload {
   content: string
   dmConversationId: string
   createdAt: string
+  attachmentUrl: string | null
   author: { id: string; name: string | null; image: string | null }
 }
 
@@ -36,7 +38,7 @@ export interface ClientToServerEvents {
   'channel:join': (payload: { channelId: string }, ack: (response: { ok: true } | { ok: false; error: string }) => void) => void
   'channel:leave': (payload: { channelId: string }) => void
   'message:new': (
-    payload: { channelId: string; content: string },
+    payload: { channelId: string; content: string; attachmentUrl?: string },
     ack: (response: { ok: true } | { ok: false; error: string }) => void
   ) => void
   'message:delete': (
@@ -50,7 +52,7 @@ export interface ClientToServerEvents {
   'dm:join': (payload: { otherUserId: string }, ack: (response: { ok: true } | { ok: false; error: string }) => void) => void
   'dm:leave': (payload: { otherUserId: string }) => void
   'dm:message:new': (
-    payload: { recipientUserId: string; content: string },
+    payload: { recipientUserId: string; content: string; attachmentUrl?: string },
     ack: (response: { ok: true } | { ok: false; error: string }) => void
   ) => void
   'dm:message:delete': (

@@ -56,6 +56,10 @@ if (isMain) {
     process.exit(1)
   }
 
+  if (!process.env.SUPABASE_URL) {
+    console.warn('SUPABASE_URL is not set — message/avatar/icon image attachments will be rejected')
+  }
+
   process.on('unhandledRejection', (error) => {
     console.error('Unhandled promise rejection:', error)
   })

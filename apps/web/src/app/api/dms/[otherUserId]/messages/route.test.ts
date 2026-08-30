@@ -49,7 +49,10 @@ describe('GET /api/dms/:otherUserId/messages', () => {
 
   it('returns messages oldest-first with author info', async () => {
     const conversation = await prisma.dmConversation.create({
-      data: { participants: { create: [{ userId: userAId }, { userId: userBId }] } },
+      data: {
+        pairKey: [userAId, userBId].sort().join(':'),
+        participants: { create: [{ userId: userAId }, { userId: userBId }] },
+      },
     })
     await prisma.message.create({ data: { content: 'hi', dmConversationId: conversation.id, authorId: userAId } })
     await prisma.message.create({ data: { content: 'hello', dmConversationId: conversation.id, authorId: userBId } })

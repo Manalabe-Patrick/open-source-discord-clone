@@ -5,7 +5,7 @@ import { signOut } from 'next-auth/react'
 import { parseErrorResponse } from '@/lib/parseErrorResponse'
 import { disconnectSocket } from '@/lib/socket'
 
-type Server = { id: string; name: string }
+type Server = { id: string; name: string; icon: string | null }
 
 export function ServerSidebar({
   servers,
@@ -32,6 +32,52 @@ export function ServerSidebar({
   const [joinId, setJoinId] = useState('')
   const [error, setError] = useState('')
   const [leaveError, setLeaveError] = useState('')
+  const [avatarError, setAvatarError] = useState('')
+  const [iconError, setIconError] = useState('')
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const [uploadingIcon, setUploadingIcon] = useState(false)
+
+  async function uploadAvatar(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    if (!file) return
+    setUploadingAvatar(true)
+    setAvatarError('')
+
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const response = await fetch('/api/uploads/avatar', { method: 'POST', body: formData })
+      if (!response.ok) {
+        setAvatarError(await parseErrorResponse(response))
+      }
+    } catch {
+      setAvatarError('Upload failed')
+    } finally {
+      setUploadingAvatar(false)
+      event.target.value = ''
+    }
+  }
+
+  async function uploadServerIcon(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    if (!file || !activeServerId) return
+    setUploadingIcon(true)
+    setIconError('')
+
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const response = await fetch(`/api/servers/${activeServerId}/icon`, { method: 'POST', body: formData })
+      if (!response.ok) {
+        setIconError(await parseErrorResponse(response))
+      }
+    } catch {
+      setIconError('Upload failed')
+    } finally {
+      setUploadingIcon(false)
+      event.target.value = ''
+    }
+  }
 
   async function createServer() {
     if (!name.trim()) return
@@ -83,6 +129,13 @@ export function ServerSidebar({
           Log out
         </button>
       </div>
+      <div className="flex flex-col gap-1">
+        <label className="text-xs text-gray-500">
+          Update avatar
+          <input type="file" accept="image/*" onChange={uploadAvatar} disabled={uploadingAvatar} className="mt-1 block w-full text-xs" />
+        </label>
+        {avatarError && <p className="text-xs text-red-500">{avatarError}</p>}
+      </div>
       <button
         onClick={onOpenDMs}
         className={`rounded p-2 text-left ${dmsActive ? 'bg-indigo-100' : ''}`}
@@ -100,9 +153,16 @@ export function ServerSidebar({
           <li key={server.id} className="flex items-center gap-1">
             <button
               onClick={() => onSelect(server.id)}
-              className={`w-full rounded p-2 text-left ${activeServerId === server.id ? 'bg-indigo-100' : ''}`}
+              className={`flex w-full items-center gap-2 rounded p-2 text-left ${activeServerId === server.id ? 'bg-indigo-100' : ''}`}
             >
-              {server.name}
+              {server.icon ? (
+                <img src={server.icon} className="h-8 w-8 rounded-full" alt="" />
+              ) : (
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-300 text-xs font-semibold">
+                  {server.name.charAt(0).toUpperCase()}
+                </span>
+              )}
+              <span>{server.name}</span>
             </button>
             {activeServerId === server.id && (
               <button
@@ -116,6 +176,15 @@ export function ServerSidebar({
           </li>
         ))}
       </ul>
+      {activeServerId && (
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-gray-500">
+            Update server icon
+            <input type="file" accept="image/*" onChange={uploadServerIcon} disabled={uploadingIcon} className="mt-1 block w-full text-xs" />
+          </label>
+          {iconError && <p className="text-xs text-red-500">{iconError}</p>}
+        </div>
+      )}
       {leaveError && <p className="text-xs text-red-500">{leaveError}</p>}
       <div className="mt-4 flex flex-col gap-1">
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="New server name" className="rounded border p-1 text-sm" />

@@ -109,6 +109,7 @@ model Channel {
 model Message {
   id               String   @id @default(cuid())
   content          String
+  attachmentUrl    String?
   authorId         String
   channelId        String?
   dmConversationId String?
@@ -122,6 +123,7 @@ model Message {
 model DmConversation {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())
+  pairKey   String   @unique
 
   participants DmParticipant[]
   messages     Message[]

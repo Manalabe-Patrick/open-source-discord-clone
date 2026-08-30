@@ -2,12 +2,14 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { getSocket } from '@/lib/socket'
+import { parseErrorResponse } from '@/lib/parseErrorResponse'
 
 type DMMessage = {
   id: string
   content: string
   dmConversationId: string
   createdAt: string
+  attachmentUrl: string | null
   author: { id: string; name: string | null; image: string | null }
 }
 
@@ -15,6 +17,8 @@ export function DMPanel({ otherUserId, otherUserName, currentUserId }: { otherUs
   const [messages, setMessages] = useState<DMMessage[]>([])
   const [content, setContent] = useState('')
   const [error, setError] = useState('')
+  const [attachmentUrl, setAttachmentUrl] = useState<string | null>(null)
+  const [uploading, setUploading] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -62,13 +66,38 @@ export function DMPanel({ otherUserId, otherUserName, currentUserId }: { otherUs
 
   function sendMessage(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!content.trim()) return
+    if (!content.trim() && !attachmentUrl) return
     setError('')
 
-    getSocket().emit('dm:message:new', { recipientUserId: otherUserId, content }, (response: { ok: true } | { ok: false; error: string }) => {
+    getSocket().emit('dm:message:new', { recipientUserId: otherUserId, content, attachmentUrl: attachmentUrl ?? undefined }, (response: { ok: true } | { ok: false; error: string }) => {
       if (!response.ok) setError(response.error)
     })
     setContent('')
+    setAttachmentUrl(null)
+  }
+
+  async function attachImage(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    setError('')
+
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const response = await fetch('/api/uploads/message-image', { method: 'POST', body: formData })
+      if (response.ok) {
+        const { url } = await response.json()
+        setAttachmentUrl(url)
+      } else {
+        setError(await parseErrorResponse(response))
+      }
+    } catch {
+      setError('Upload failed')
+    } finally {
+      setUploading(false)
+      event.target.value = ''
+    }
   }
 
   function deleteMessage(message: DMMessage) {
@@ -87,6 +116,7 @@ export function DMPanel({ otherUserId, otherUserName, currentUserId }: { otherUs
               <span className="font-semibold">{message.author.name ?? 'Unknown'}</span>{' '}
               <span className="text-xs text-gray-500">{new Date(message.createdAt).toLocaleTimeString()}</span>
               <p>{message.content}</p>
+              {message.attachmentUrl && <img src={message.attachmentUrl} alt="attachment" className="mt-1 max-w-xs rounded" />}
             </div>
             {message.author.id === currentUserId && (
               <button onClick={() => deleteMessage(message)} className="text-xs text-gray-400 hover:text-red-500" title="Delete message">
@@ -99,6 +129,8 @@ export function DMPanel({ otherUserId, otherUserName, currentUserId }: { otherUs
       </div>
       {error && <p className="px-3 text-xs text-red-500">{error}</p>}
       <form onSubmit={sendMessage} className="flex gap-2 border-t p-3">
+        <input type="file" accept="image/*" onChange={attachImage} disabled={uploading} className="text-xs" />
+        {attachmentUrl && <span className="self-center text-xs text-green-600">Image attached</span>}
         <input
           value={content}
           onChange={(e) => setContent(e.target.value)}

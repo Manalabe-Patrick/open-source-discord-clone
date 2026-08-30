@@ -37,6 +37,8 @@ export async function GET() {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
   }
 
+  // Note: `include` returns all scalar fields (including `icon`) by default —
+  // no explicit `icon: true` is needed alongside it.
   const servers = await prisma.server.findMany({
     where: { memberships: { some: { userId: session.user.id } } },
     include: {

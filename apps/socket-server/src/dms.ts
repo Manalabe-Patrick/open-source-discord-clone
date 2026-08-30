@@ -1,34 +1,52 @@
-import { prisma } from '@repo/database'
+import { prisma, Prisma } from '@repo/database'
 import type { DmConversation } from '@repo/database'
 import type { DMMessagePayload, TypedServer, TypedSocket } from './types.js'
 import { safeHandler } from './safeHandler.js'
+import { isValidAttachmentUrl } from './attachments.js'
+
+// Two near-simultaneous first-ever messages between the same pair of users
+// used to be able to race a read-then-create pattern into creating two
+// separate DmConversation rows for the same pair, permanently splitting
+// their message history. pairKey is a unique, order-independent key derived
+// from both user ids, so lookup/creation can go through a single atomic
+// upsert instead.
+function pairKey(userIdA: string, userIdB: string): string {
+  return [userIdA, userIdB].sort().join(':')
+}
 
 export function dmRoom(userIdA: string, userIdB: string): string {
-  return `dm:${[userIdA, userIdB].sort().join(':')}`
+  return `dm:${pairKey(userIdA, userIdB)}`
 }
 
 export async function findDMConversation(userIdA: string, userIdB: string): Promise<DmConversation | null> {
-  return prisma.dmConversation.findFirst({
-    where: {
-      AND: [
-        { participants: { some: { userId: userIdA } } },
-        { participants: { some: { userId: userIdB } } },
-      ],
-    },
-  })
+  return prisma.dmConversation.findUnique({ where: { pairKey: pairKey(userIdA, userIdB) } })
 }
 
 export async function getOrCreateDMConversation(userIdA: string, userIdB: string): Promise<DmConversation> {
-  const existing = await findDMConversation(userIdA, userIdB)
-  if (existing) return existing
-
-  return prisma.dmConversation.create({
-    data: {
-      participants: {
-        create: [{ userId: userIdA }, { userId: userIdB }],
+  const key = pairKey(userIdA, userIdB)
+  try {
+    return await prisma.dmConversation.upsert({
+      where: { pairKey: key },
+      update: {},
+      create: {
+        pairKey: key,
+        participants: { create: [{ userId: userIdA }, { userId: userIdB }] },
       },
-    },
-  })
+    })
+  } catch (error) {
+    // upsert's `create` branch nests a participants write, which Prisma can't
+    // compile to a single native INSERT ... ON CONFLICT — it falls back to a
+    // find-then-create, so a genuine concurrent race can still lose here.
+    // The unique index on pairKey means that race raises P2002 rather than
+    // creating a duplicate row (the original bug this replaced), so on P2002
+    // the winner's row is already committed — just look it up instead of
+    // surfacing the race as an error to the caller who lost it.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      const existing = await prisma.dmConversation.findUnique({ where: { pairKey: key } })
+      if (existing) return existing
+    }
+    throw error
+  }
 }
 
 export function registerDMHandlers(io: TypedServer, socket: TypedSocket) {
@@ -60,7 +78,7 @@ export function registerDMHandlers(io: TypedServer, socket: TypedSocket) {
 
   socket.on(
     'dm:message:new',
-    safeHandler(async ({ recipientUserId, content }, ack) => {
+    safeHandler(async ({ recipientUserId, content, attachmentUrl }, ack) => {
       if (recipientUserId === socket.data.userId) {
         ack({ ok: false, error: 'Cannot message yourself' })
         return
@@ -73,15 +91,19 @@ export function registerDMHandlers(io: TypedServer, socket: TypedSocket) {
       }
 
       const trimmed = content.trim()
-      if (!trimmed) {
-        ack({ ok: false, error: 'Message content is required' })
+      if (!trimmed && !attachmentUrl) {
+        ack({ ok: false, error: 'Message content or an attachment is required' })
+        return
+      }
+      if (attachmentUrl && !isValidAttachmentUrl(attachmentUrl)) {
+        ack({ ok: false, error: 'Invalid attachment URL' })
         return
       }
 
       const conversation = await getOrCreateDMConversation(socket.data.userId, recipientUserId)
 
       const message = await prisma.message.create({
-        data: { content: trimmed, dmConversationId: conversation.id, authorId: socket.data.userId },
+        data: { content: trimmed, dmConversationId: conversation.id, authorId: socket.data.userId, attachmentUrl: attachmentUrl ?? null },
         include: { author: { select: { id: true, name: true, image: true } } },
       })
 
@@ -90,6 +112,7 @@ export function registerDMHandlers(io: TypedServer, socket: TypedSocket) {
         content: message.content,
         dmConversationId: conversation.id,
         createdAt: message.createdAt.toISOString(),
+        attachmentUrl: message.attachmentUrl,
         author: message.author,
       }
 

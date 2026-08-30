@@ -4,11 +4,12 @@ import type { TypedServer, TypedSocket, MessagePayload } from './types.js'
 import { getServerMembership } from './membership.js'
 import { channelRoom } from './channels.js'
 import { safeHandler } from './safeHandler.js'
+import { isValidAttachmentUrl } from './attachments.js'
 
 export function registerMessageHandlers(io: TypedServer, socket: TypedSocket) {
   socket.on(
     'message:new',
-    safeHandler(async ({ channelId, content }, ack) => {
+    safeHandler(async ({ channelId, content, attachmentUrl }, ack) => {
       const membership = await getServerMembership(socket.data.userId, channelId)
       if (!membership) {
         ack({ ok: false, error: 'Not a member of this channel\'s server' })
@@ -16,13 +17,17 @@ export function registerMessageHandlers(io: TypedServer, socket: TypedSocket) {
       }
 
       const trimmed = content.trim()
-      if (!trimmed) {
-        ack({ ok: false, error: 'Message content is required' })
+      if (!trimmed && !attachmentUrl) {
+        ack({ ok: false, error: 'Message content or an attachment is required' })
+        return
+      }
+      if (attachmentUrl && !isValidAttachmentUrl(attachmentUrl)) {
+        ack({ ok: false, error: 'Invalid attachment URL' })
         return
       }
 
       const message = await prisma.message.create({
-        data: { content: trimmed, channelId, authorId: socket.data.userId },
+        data: { content: trimmed, channelId, authorId: socket.data.userId, attachmentUrl: attachmentUrl ?? null },
         include: { author: { select: { id: true, name: true, image: true } } },
       })
 
@@ -31,6 +36,7 @@ export function registerMessageHandlers(io: TypedServer, socket: TypedSocket) {
         content: message.content,
         channelId,
         createdAt: message.createdAt.toISOString(),
+        attachmentUrl: message.attachmentUrl,
         author: message.author,
       }
 

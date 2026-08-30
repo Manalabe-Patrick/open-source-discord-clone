@@ -2190,7 +2190,7 @@ Once this is done, continue to Task 8.3 — every task after this one assumes `S
 - Create: `apps/web/src/lib/supabase.ts`
 
 **Interfaces:**
-- Produces: `uploadImage(file: File, pathPrefix: string): Promise<string>` — uploads an image file to the `attachments` bucket under `${pathPrefix}/${timestamp}.${ext}`, returns the public URL. Throws if the file isn't an image or the upload fails (callers — Tasks 8.4-8.6 — catch this and turn it into a 400/500 response).
+- Produces: `uploadImage(file: File, pathPrefix: string): Promise<string>` — uploads an image file to the `attachments` bucket under `${pathPrefix}/${timestamp}.${ext}`, returns the public URL. Throws `UploadValidationError` (also exported) for a caller-fixable problem (bad file type, file over 8MB) and a plain `Error` for anything else (misconfiguration, upstream Storage failure) — callers (Tasks 8.4-8.6) check `instanceof UploadValidationError` to pick 400 vs 500.
 
 No automated test — this function's only logic is a thin wrapper around the Supabase SDK requiring a real network call to Storage; it's exercised by Task 8.9's manual checkpoint (which requires the real Supabase project from Task 8.2 to already exist) rather than mocked in a unit test, since mocking the entire Supabase client would test the mock, not the integration.
 
@@ -2212,22 +2212,29 @@ const supabaseAdmin =
 
 const ATTACHMENTS_BUCKET = 'attachments'
 const ALLOWED_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp'])
+const MAX_FILE_SIZE_BYTES = 8 * 1024 * 1024
+
+// Thrown for caller-fixable problems (bad file type/size) so callers can map this to a 400;
+// any other thrown error (misconfiguration, upstream failure) should map to a 500.
+export class UploadValidationError extends Error {}
 
 export async function uploadImage(file: File, pathPrefix: string): Promise<string> {
   if (!supabaseAdmin) {
     throw new Error('Supabase Storage is not configured (SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY missing)')
   }
   if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
-    throw new Error('Only PNG, JPEG, GIF, and WebP images are allowed')
+    throw new UploadValidationError('Only PNG, JPEG, GIF, and WebP images are allowed')
+  }
+  if (file.size > MAX_FILE_SIZE_BYTES) {
+    throw new UploadValidationError('Image must be 8MB or smaller')
   }
 
   const extension = file.type.split('/')[1]
   const path = `${pathPrefix}/${Date.now()}.${extension}`
-  const buffer = Buffer.from(await file.arrayBuffer())
 
-  const { error } = await supabaseAdmin.storage.from(ATTACHMENTS_BUCKET).upload(path, buffer, {
+  const { error } = await supabaseAdmin.storage.from(ATTACHMENTS_BUCKET).upload(path, file, {
     contentType: file.type,
-    upsert: true,
+    upsert: false,
   })
   if (error) {
     throw new Error(`Upload failed: ${error.message}`)
@@ -2257,7 +2264,7 @@ git commit -m "feat: add Supabase Storage upload helper"
 
 **Interfaces:**
 - Consumes: `auth` (existing), `uploadImage` (Task 8.3).
-- Produces: `POST /api/uploads/avatar` accepting `multipart/form-data` with a `file` field, uploads it, updates `User.image`, returns `200` with `{ image: string }`. Returns `401` if not authenticated, `400` if no file or the upload helper throws.
+- Produces: `POST /api/uploads/avatar` accepting `multipart/form-data` with a `file` field, uploads it, updates `User.image`, returns `200` with `{ image: string }`. Returns `401` if not authenticated, `400` if no file or a `UploadValidationError`, `500` for any other upload error.
 
 No automated test — requires a real Supabase upload (Task 8.2's manual setup), verified in Task 8.9.
 
@@ -2267,7 +2274,7 @@ No automated test — requires a real Supabase upload (Task 8.2's manual setup),
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@repo/database'
-import { uploadImage } from '@/lib/supabase'
+import { uploadImage, UploadValidationError } from '@/lib/supabase'
 
 export async function POST(request: Request) {
   const session = await auth()
@@ -2285,7 +2292,10 @@ export async function POST(request: Request) {
   try {
     url = await uploadImage(file, `avatars/${session.user.id}`)
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : 'Upload failed' }, { status: 400 })
+    if (error instanceof UploadValidationError) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+    return NextResponse.json({ error: 'Upload failed' }, { status: 500 })
   }
 
   await prisma.user.update({ where: { id: session.user.id }, data: { image: url } })
@@ -2323,7 +2333,7 @@ No automated test — same reasoning as Task 8.4.
 import { NextResponse } from 'next/server'
 import { prisma } from '@repo/database'
 import { requireMembership } from '@/lib/requireMembership'
-import { uploadImage } from '@/lib/supabase'
+import { uploadImage, UploadValidationError } from '@/lib/supabase'
 
 export async function POST(request: Request, { params }: { params: Promise<{ serverId: string }> }) {
   const { serverId } = await params
@@ -2345,7 +2355,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ ser
   try {
     url = await uploadImage(file, `server-icons/${serverId}`)
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : 'Upload failed' }, { status: 400 })
+    if (error instanceof UploadValidationError) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+    return NextResponse.json({ error: 'Upload failed' }, { status: 500 })
   }
 
   await prisma.server.update({ where: { id: serverId }, data: { icon: url } })
@@ -2381,7 +2394,7 @@ No automated test — same reasoning as Task 8.4.
 ```typescript
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
-import { uploadImage } from '@/lib/supabase'
+import { uploadImage, UploadValidationError } from '@/lib/supabase'
 
 export async function POST(request: Request) {
   const session = await auth()
@@ -2399,7 +2412,10 @@ export async function POST(request: Request) {
   try {
     url = await uploadImage(file, `message-images/${session.user.id}`)
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : 'Upload failed' }, { status: 400 })
+    if (error instanceof UploadValidationError) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+    return NextResponse.json({ error: 'Upload failed' }, { status: 500 })
   }
 
   return NextResponse.json({ url }, { status: 200 })

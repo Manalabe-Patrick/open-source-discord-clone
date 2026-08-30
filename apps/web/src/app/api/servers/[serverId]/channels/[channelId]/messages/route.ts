@@ -27,6 +27,7 @@ export async function GET(
     content: message.content,
     channelId: message.channelId,
     createdAt: message.createdAt.toISOString(),
+    attachmentUrl: message.attachmentUrl,
     author: message.author,
   }))
 

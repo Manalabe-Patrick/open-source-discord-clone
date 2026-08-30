@@ -13,6 +13,7 @@
     "@auth/prisma-adapter": "^2.11.3",
     "@repo/database": "*",
     "@repo/permissions": "*",
+    "@supabase/supabase-js": "^2.112.4",
     "bcryptjs": "^3.0.3",
     "next": "16.3.3",
     "next-auth": "^5.0.0-beta.32",

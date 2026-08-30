@@ -63,6 +63,11 @@ export function MemberList({ serverId, role, currentUserId, onMessageMember }: {
       <ul className="flex flex-col gap-1">
         {members.map((member) => (
           <li key={member.id} className="flex items-center gap-2 text-sm">
+            {member.image ? (
+              <img src={member.image} className="h-6 w-6 rounded-full" alt="" />
+            ) : (
+              <span className="h-6 w-6 rounded-full bg-gray-300" />
+            )}
             <span className={`h-2 w-2 rounded-full ${STATUS_COLOR[member.status]}`} title={member.status} />
             <span>{member.name ?? 'Unknown'}</span>
             {member.role !== 'MEMBER' && <span className="text-xs text-gray-500">({member.role})</span>}

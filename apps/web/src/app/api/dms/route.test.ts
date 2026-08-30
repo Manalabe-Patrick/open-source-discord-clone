@@ -49,7 +49,10 @@ describe('GET /api/dms', () => {
 
   it('lists a conversation with the other participant\'s info', async () => {
     const conversation = await prisma.dmConversation.create({
-      data: { participants: { create: [{ userId: userAId }, { userId: userBId }] } },
+      data: {
+        pairKey: [userAId, userBId].sort().join(':'),
+        participants: { create: [{ userId: userAId }, { userId: userBId }] },
+      },
     })
     mockSession(userAId)
 
