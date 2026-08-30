@@ -29,7 +29,7 @@ export function registerMessageHandlers(io: TypedServer, socket: TypedSocket) {
       const payload: MessagePayload = {
         id: message.id,
         content: message.content,
-        channelId: message.channelId,
+        channelId,
         createdAt: message.createdAt.toISOString(),
         author: message.author,
       }

@@ -13,12 +13,20 @@ export function ServerSidebar({
   onSelect,
   onCreated,
   onLeft,
+  onOpenDMs,
+  dmsActive,
+  onOpenFriends,
+  friendsActive,
 }: {
   servers: Server[]
   activeServerId: string | null
   onSelect: (serverId: string) => void
   onCreated: (server: Server) => void
   onLeft: (serverId: string) => void
+  onOpenDMs: () => void
+  dmsActive: boolean
+  onOpenFriends: () => void
+  friendsActive: boolean
 }) {
   const [name, setName] = useState('')
   const [joinId, setJoinId] = useState('')
@@ -75,6 +83,18 @@ export function ServerSidebar({
           Log out
         </button>
       </div>
+      <button
+        onClick={onOpenDMs}
+        className={`rounded p-2 text-left ${dmsActive ? 'bg-indigo-100' : ''}`}
+      >
+        Direct Messages
+      </button>
+      <button
+        onClick={onOpenFriends}
+        className={`rounded p-2 text-left ${friendsActive ? 'bg-indigo-100' : ''}`}
+      >
+        Friends
+      </button>
       <ul className="flex flex-col gap-1">
         {servers.map((server) => (
           <li key={server.id} className="flex items-center gap-1">

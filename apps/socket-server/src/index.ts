@@ -9,6 +9,7 @@ import { registerChannelHandlers } from './channels.js'
 import { registerMessageHandlers } from './messages.js'
 import { registerTypingHandlers } from './typing.js'
 import { registerPresenceHandlers } from './presence.js'
+import { registerDMHandlers } from './dms.js'
 import type { ClientToServerEvents, ServerToClientEvents, SocketData } from './types.js'
 
 export function createServer() {
@@ -42,6 +43,7 @@ export function createServer() {
     registerMessageHandlers(io, socket)
     registerTypingHandlers(io, socket)
     registerPresenceHandlers(io, socket)
+    registerDMHandlers(io, socket)
   })
 
   return { app, httpServer, io }

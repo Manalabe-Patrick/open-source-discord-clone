@@ -13,7 +13,7 @@ const STATUS_COLOR: Record<Member['status'], string> = {
   OFFLINE: 'bg-gray-400',
 }
 
-export function MemberList({ serverId, role }: { serverId: string; role: Role }) {
+export function MemberList({ serverId, role, currentUserId, onMessageMember }: { serverId: string; role: Role; currentUserId: string; onMessageMember: (userId: string, name: string | null) => void }) {
   const [members, setMembers] = useState<Member[]>([])
   const [error, setError] = useState('')
 
@@ -66,6 +66,11 @@ export function MemberList({ serverId, role }: { serverId: string; role: Role })
             <span className={`h-2 w-2 rounded-full ${STATUS_COLOR[member.status]}`} title={member.status} />
             <span>{member.name ?? 'Unknown'}</span>
             {member.role !== 'MEMBER' && <span className="text-xs text-gray-500">({member.role})</span>}
+            {member.id !== currentUserId && (
+              <button onClick={() => onMessageMember(member.id, member.name)} className="rounded border p-1 text-xs" title="Send a direct message">
+                Message
+              </button>
+            )}
             {canKickMember(role) && member.role !== 'OWNER' && (
               <button onClick={() => kickMember(member.id)} className="ml-auto rounded border p-1 text-xs" title="Kick member">
                 Kick

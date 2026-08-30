@@ -12,6 +12,14 @@ export interface MessagePayload {
   author: { id: string; name: string | null; image: string | null }
 }
 
+export interface DMMessagePayload {
+  id: string
+  content: string
+  dmConversationId: string
+  createdAt: string
+  author: { id: string; name: string | null; image: string | null }
+}
+
 export interface TypingPayload {
   channelId: string
   userId: string
@@ -39,6 +47,16 @@ export interface ClientToServerEvents {
   'typing:stop': (payload: { channelId: string }) => void
   'presence:idle': () => void
   'presence:active': () => void
+  'dm:join': (payload: { otherUserId: string }, ack: (response: { ok: true } | { ok: false; error: string }) => void) => void
+  'dm:leave': (payload: { otherUserId: string }) => void
+  'dm:message:new': (
+    payload: { recipientUserId: string; content: string },
+    ack: (response: { ok: true } | { ok: false; error: string }) => void
+  ) => void
+  'dm:message:delete': (
+    payload: { dmConversationId: string; messageId: string },
+    ack: (response: { ok: true } | { ok: false; error: string }) => void
+  ) => void
 }
 
 export interface ServerToClientEvents {
@@ -47,6 +65,8 @@ export interface ServerToClientEvents {
   'typing:start': (payload: TypingPayload) => void
   'typing:stop': (payload: TypingPayload) => void
   'presence:update': (payload: PresencePayload) => void
+  'dm:message:new': (message: DMMessagePayload) => void
+  'dm:message:delete': (payload: { dmConversationId: string; messageId: string }) => void
 }
 
 export type TypedServer = Server<ClientToServerEvents, ServerToClientEvents, Record<string, never>, SocketData>
