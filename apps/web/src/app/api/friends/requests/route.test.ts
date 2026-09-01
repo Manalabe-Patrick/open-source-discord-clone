@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterAll, type Mock } from 'vitest'
 import { prisma } from '@repo/database'
-import { POST } from './route'
+import { POST, resetFriendRequestRateLimit } from './route'
 
 vi.mock('@/lib/auth', () => ({ auth: vi.fn() }))
 import { auth } from '@/lib/auth'
@@ -22,6 +22,7 @@ describe('POST /api/friends/requests', () => {
   let addresseeId: string
 
   beforeEach(async () => {
+    resetFriendRequestRateLimit()
     await prisma.friendRequest.deleteMany({})
     await prisma.user.deleteMany({ where: { email: { in: ['friend-req@example.com', 'friend-addr@example.com'] } } })
 
@@ -64,5 +65,22 @@ describe('POST /api/friends/requests', () => {
     await POST(makeRequest({ email: 'friend-addr@example.com' }))
     const response = await POST(makeRequest({ email: 'friend-addr@example.com' }))
     expect(response.status).toBe(400)
+  })
+
+  it('rate limits repeated friend requests from the same user', async () => {
+    mockSession(requesterId)
+    const targetEmails = Array.from({ length: 21 }, (_, i) => `friend-target-${i}@example.com`)
+    await prisma.user.createMany({ data: targetEmails.map((email) => ({ email, name: email })) })
+
+    for (let i = 0; i < 20; i++) {
+      const response = await POST(makeRequest({ email: targetEmails[i] }))
+      expect(response.status).toBe(201)
+    }
+
+    const limited = await POST(makeRequest({ email: targetEmails[20] }))
+    expect(limited.status).toBe(429)
+
+    await prisma.friendRequest.deleteMany({ where: { requesterId } })
+    await prisma.user.deleteMany({ where: { email: { in: targetEmails } } })
   })
 })

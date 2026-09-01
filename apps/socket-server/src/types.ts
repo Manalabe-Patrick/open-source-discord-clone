@@ -34,6 +34,14 @@ export interface PresencePayload {
   status: PresenceStatus
 }
 
+export interface ProfilePayload {
+  userId: string
+  name: string | null
+  image: string | null
+  customStatus: string | null
+  bio: string | null
+}
+
 export interface ClientToServerEvents {
   'channel:join': (payload: { channelId: string }, ack: (response: { ok: true } | { ok: false; error: string }) => void) => void
   'channel:leave': (payload: { channelId: string }) => void
@@ -49,6 +57,7 @@ export interface ClientToServerEvents {
   'typing:stop': (payload: { channelId: string }) => void
   'presence:idle': () => void
   'presence:active': () => void
+  'profile:updated': () => void
   'dm:join': (payload: { otherUserId: string }, ack: (response: { ok: true } | { ok: false; error: string }) => void) => void
   'dm:leave': (payload: { otherUserId: string }) => void
   'dm:message:new': (
@@ -67,6 +76,7 @@ export interface ServerToClientEvents {
   'typing:start': (payload: TypingPayload) => void
   'typing:stop': (payload: TypingPayload) => void
   'presence:update': (payload: PresencePayload) => void
+  'profile:update': (payload: ProfilePayload) => void
   'dm:message:new': (message: DMMessagePayload) => void
   'dm:message:delete': (payload: { dmConversationId: string; messageId: string }) => void
 }

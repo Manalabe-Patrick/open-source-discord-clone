@@ -51,21 +51,21 @@ export function ChannelList({
   }
 
   return (
-    <div className="flex w-52 flex-col gap-2 border-r p-3">
-      <h3 className="font-bold"># Channels</h3>
-      <ul className="flex flex-col gap-1">
+    <div className="flex w-56 flex-col gap-2 border-r border-hairline bg-surface p-4">
+      <h3 className="font-display text-sm font-semibold tracking-tight text-text-muted uppercase">Channels</h3>
+      <ul className="flex flex-1 flex-col gap-0.5 overflow-y-auto">
         {channels.map((channel) => (
           <li key={channel.id} className="flex items-center gap-1">
             <button
               onClick={() => onSelectChannel(channel.id)}
-              className={`w-full rounded p-1 text-left text-sm ${selectedChannelId === channel.id ? 'bg-indigo-100' : ''}`}
+              className={`w-full truncate rounded-lg p-1.5 text-left text-sm font-medium transition-colors ${selectedChannelId === channel.id ? 'bg-surface-raised text-text' : 'text-text-muted hover:bg-surface-raised hover:text-text'}`}
             >
-              # {channel.name}
+              <span className="text-text-muted">#</span> {channel.name}
             </button>
             {canDeleteChannel(role) && (
               <button
                 onClick={() => deleteChannel(channel.id)}
-                className="rounded border p-1 text-xs whitespace-nowrap"
+                className="shrink-0 rounded-md border border-hairline px-2 py-1 text-xs font-medium text-text-muted transition-colors hover:border-danger hover:text-danger whitespace-nowrap"
                 title="Delete channel"
               >
                 Delete
@@ -74,10 +74,17 @@ export function ChannelList({
           </li>
         ))}
       </ul>
-      {error && <p className="text-xs text-red-500">{error}</p>}
-      <div className="mt-2 flex flex-col gap-1">
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="New channel name" className="rounded border p-1 text-sm" />
-        <button onClick={createChannel} className="rounded border p-1 text-sm">Create channel</button>
+      {error && <p className="text-xs text-danger">{error}</p>}
+      <div className="flex flex-col gap-2 border-t border-hairline pt-3">
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="New channel name"
+          className="rounded-lg border border-hairline bg-canvas p-2 text-sm text-text placeholder:text-text-muted focus:border-accent focus:outline-none"
+        />
+        <button onClick={createChannel} className="rounded-lg border border-hairline p-2 text-sm font-medium text-text transition-colors hover:bg-surface-raised">
+          Create channel
+        </button>
       </div>
     </div>
   )

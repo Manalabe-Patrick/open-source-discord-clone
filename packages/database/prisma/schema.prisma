@@ -20,6 +20,8 @@ model User {
   emailVerified DateTime?
   passwordHash  String?
   image         String?
+  bio           String?    @db.VarChar(190)
+  customStatus  String?    @db.VarChar(128)
   status        UserStatus @default(OFFLINE)
   createdAt     DateTime  @default(now())
 

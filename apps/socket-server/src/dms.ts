@@ -3,6 +3,9 @@ import type { DmConversation } from '@repo/database'
 import type { DMMessagePayload, TypedServer, TypedSocket } from './types.js'
 import { safeHandler } from './safeHandler.js'
 import { isValidAttachmentUrl } from './attachments.js'
+import { createRateLimiter } from './rateLimit.js'
+
+const dmMessageRateLimiter = createRateLimiter({ limit: 10, windowMs: 10 * 1000 })
 
 // Two near-simultaneous first-ever messages between the same pair of users
 // used to be able to race a read-then-create pattern into creating two
@@ -79,6 +82,11 @@ export function registerDMHandlers(io: TypedServer, socket: TypedSocket) {
   socket.on(
     'dm:message:new',
     safeHandler(async ({ recipientUserId, content, attachmentUrl }, ack) => {
+      if (!dmMessageRateLimiter.consume(socket.data.userId)) {
+        ack({ ok: false, error: 'You are sending messages too fast' })
+        return
+      }
+
       if (recipientUserId === socket.data.userId) {
         ack({ ok: false, error: 'Cannot message yourself' })
         return

@@ -14,6 +14,15 @@ import { useIdleDetection } from '@/lib/useIdleDetection'
 type Channel = { id: string; name: string }
 type Server = { id: string; name: string; icon: string | null; channels: Channel[]; role: 'OWNER' | 'ADMIN' | 'MEMBER' }
 
+function EmptyState({ message }: { message: string }) {
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center gap-2 bg-canvas text-text-muted">
+      <span className="font-display text-2xl text-hairline">#</span>
+      <p className="text-sm">{message}</p>
+    </div>
+  )
+}
+
 export default function HomePage() {
   useIdleDetection()
   const { data: session } = useSession()
@@ -63,24 +72,32 @@ export default function HomePage() {
           setServers((prev) => prev.filter((s) => s.id !== serverId))
           setActiveServerId((current) => (current === serverId ? null : current))
         }}
+        onIconUpdated={(serverId, icon) => {
+          setServers((prev) => prev.map((s) => (s.id === serverId ? { ...s, icon } : s)))
+        }}
         onOpenDMs={() => setView('dm')}
         dmsActive={view === 'dm'}
         onOpenFriends={() => setView('friends')}
         friendsActive={view === 'friends'}
+        onMessageUser={openDM}
       />
       {view === 'friends' ? (
         <FriendsPanel onMessageFriend={openDM} />
       ) : view === 'dm' ? (
         <>
-          <DMSidebar
-            activeOtherUserId={activeDM?.userId ?? null}
-            onSelect={(userId, name) => setActiveDM({ userId, name })}
-            refreshKey={dmRefreshKey}
-          />
+          {session?.user?.id && (
+            <DMSidebar
+              currentUserId={session.user.id}
+              activeOtherUserId={activeDM?.userId ?? null}
+              onSelect={(userId, name) => setActiveDM({ userId, name })}
+              onMessageUser={openDM}
+              refreshKey={dmRefreshKey}
+            />
+          )}
           {activeDM && session?.user?.id ? (
             <DMPanel otherUserId={activeDM.userId} otherUserName={activeDM.name} currentUserId={session.user.id} />
           ) : (
-            <div className="flex flex-1 items-center justify-center text-gray-500">Select a conversation</div>
+            <EmptyState message="Select a conversation" />
           )}
         </>
       ) : activeServer ? (
@@ -96,14 +113,14 @@ export default function HomePage() {
           {selectedChannelId && session?.user?.id ? (
             <ChatPanel serverId={activeServer.id} channelId={selectedChannelId} role={activeServer.role} currentUserId={session.user.id} />
           ) : (
-            <div className="flex flex-1 items-center justify-center text-gray-500">Select a channel</div>
+            <EmptyState message="Select a channel" />
           )}
           {session?.user?.id && (
             <MemberList serverId={activeServer.id} role={activeServer.role} currentUserId={session.user.id} onMessageMember={openDM} />
           )}
         </>
       ) : (
-        <div className="flex flex-1 items-center justify-center text-gray-500">Select or create a server</div>
+        <EmptyState message="Select or create a server" />
       )}
     </>
   )

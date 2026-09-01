@@ -5,11 +5,19 @@ import { getServerMembership } from './membership.js'
 import { channelRoom } from './channels.js'
 import { safeHandler } from './safeHandler.js'
 import { isValidAttachmentUrl } from './attachments.js'
+import { createRateLimiter } from './rateLimit.js'
+
+const messageRateLimiter = createRateLimiter({ limit: 10, windowMs: 10 * 1000 })
 
 export function registerMessageHandlers(io: TypedServer, socket: TypedSocket) {
   socket.on(
     'message:new',
     safeHandler(async ({ channelId, content, attachmentUrl }, ack) => {
+      if (!messageRateLimiter.consume(socket.data.userId)) {
+        ack({ ok: false, error: 'You are sending messages too fast' })
+        return
+      }
+
       const membership = await getServerMembership(socket.data.userId, channelId)
       if (!membership) {
         ack({ ok: false, error: 'Not a member of this channel\'s server' })

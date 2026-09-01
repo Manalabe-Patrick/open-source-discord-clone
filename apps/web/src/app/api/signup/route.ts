@@ -1,8 +1,23 @@
 import { NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { prisma } from '@repo/database'
+import { createRateLimiter } from '@/lib/rateLimit'
+
+const signupRateLimiter = createRateLimiter({ limit: 5, windowMs: 60 * 60 * 1000 })
+
+export function resetSignupRateLimit(): void {
+  signupRateLimiter.reset()
+}
+
+function getClientIp(request: Request): string {
+  return request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
+}
 
 export async function POST(request: Request) {
+  if (!signupRateLimiter.consume(getClientIp(request))) {
+    return NextResponse.json({ error: 'Too many signup attempts. Try again later.' }, { status: 429 })
+  }
+
   let body: unknown
   try {
     body = await request.json()

@@ -1,11 +1,22 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@repo/database'
+import { createRateLimiter } from '@/lib/rateLimit'
+
+const friendRequestRateLimiter = createRateLimiter({ limit: 20, windowMs: 60 * 60 * 1000 })
+
+export function resetFriendRequestRateLimit(): void {
+  friendRequestRateLimiter.reset()
+}
 
 export async function POST(request: Request) {
   const session = await auth()
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+  }
+
+  if (!friendRequestRateLimiter.consume(session.user.id)) {
+    return NextResponse.json({ error: 'Too many friend requests. Try again later.' }, { status: 429 })
   }
 
   let email: string | undefined

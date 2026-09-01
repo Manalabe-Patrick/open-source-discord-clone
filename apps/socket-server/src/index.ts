@@ -10,11 +10,14 @@ import { registerMessageHandlers } from './messages.js'
 import { registerTypingHandlers } from './typing.js'
 import { registerPresenceHandlers } from './presence.js'
 import { registerDMHandlers } from './dms.js'
+import { registerProfileHandlers } from './profile.js'
 import type { ClientToServerEvents, ServerToClientEvents, SocketData } from './types.js'
 
 export function createServer() {
+  const allowedOrigins = (process.env.WEB_ORIGIN ?? 'http://localhost:3000').split(',').map((origin) => origin.trim())
+
   const app = express()
-  app.use(cors({ origin: process.env.WEB_ORIGIN ?? 'http://localhost:3000' }))
+  app.use(cors({ origin: allowedOrigins }))
 
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok' })
@@ -23,7 +26,7 @@ export function createServer() {
   const httpServer = createHttpServer(app)
   const io = new SocketIOServer<ClientToServerEvents, ServerToClientEvents, Record<string, never>, SocketData>(httpServer, {
     cors: {
-      origin: process.env.WEB_ORIGIN ?? 'http://localhost:3000',
+      origin: allowedOrigins,
       credentials: true,
     },
   })
@@ -44,6 +47,7 @@ export function createServer() {
     registerTypingHandlers(io, socket)
     registerPresenceHandlers(io, socket)
     registerDMHandlers(io, socket)
+    registerProfileHandlers(io, socket)
   })
 
   return { app, httpServer, io }
