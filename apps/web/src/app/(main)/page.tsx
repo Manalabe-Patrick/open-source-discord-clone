@@ -72,6 +72,10 @@ export default function HomePage() {
           setServers((prev) => prev.filter((s) => s.id !== serverId))
           setActiveServerId((current) => (current === serverId ? null : current))
         }}
+        onDeleted={(serverId) => {
+          setServers((prev) => prev.filter((s) => s.id !== serverId))
+          setActiveServerId((current) => (current === serverId ? null : current))
+        }}
         onIconUpdated={(serverId, icon) => {
           setServers((prev) => prev.map((s) => (s.id === serverId ? { ...s, icon } : s)))
         }}

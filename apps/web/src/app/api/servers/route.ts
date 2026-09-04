@@ -41,6 +41,7 @@ export async function GET() {
   // no explicit `icon: true` is needed alongside it.
   const servers = await prisma.server.findMany({
     where: { memberships: { some: { userId: session.user.id } } },
+    orderBy: { createdAt: 'asc' },
     include: {
       channels: true,
       memberships: { where: { userId: session.user.id }, select: { role: true } },
